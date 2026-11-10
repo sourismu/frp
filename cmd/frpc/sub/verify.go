@@ -18,20 +18,43 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/fatedier/frp/pkg/config"
-
 	"github.com/spf13/cobra"
+
+	"github.com/fatedier/frp/pkg/config"
+	"github.com/fatedier/frp/pkg/config/v1/validation"
+	"github.com/fatedier/frp/pkg/policy/security"
 )
 
 func init() {
 	rootCmd.AddCommand(verifyCmd)
 }
 
+func verifyClientConfig(
+	configFile string,
+	strict bool,
+	unsafeFeatures *security.UnsafeFeatures,
+) (validation.Warning, error) {
+	cliCfg, proxyCfgs, visitorCfgs, _, err := config.LoadClientConfig(configFile, strict)
+	if err != nil {
+		return nil, err
+	}
+	return validation.ValidateAllClientConfig(cliCfg, proxyCfgs, visitorCfgs, unsafeFeatures)
+}
+
 var verifyCmd = &cobra.Command{
 	Use:   "verify",
 	Short: "Verify that the configures is valid",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		_, _, _, err := config.ParseClientConfig(cfgFile)
+		if cfgFile == "" {
+			fmt.Println("frpc: the configuration file is not specified")
+			return nil
+		}
+
+		unsafeFeatures := security.NewUnsafeFeatures(allowUnsafe)
+		warning, err := verifyClientConfig(cfgFile, strictConfigMode, unsafeFeatures)
+		if warning != nil {
+			fmt.Printf("WARNING: %v\n", warning)
+		}
 		if err != nil {
 			fmt.Println(err)
 			os.Exit(1)

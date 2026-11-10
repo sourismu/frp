@@ -10,8 +10,8 @@ import (
 )
 
 type Allocator struct {
-	reserved sets.Int
-	used     sets.Int
+	reserved sets.Set[int]
+	used     sets.Set[int]
 	mu       sync.Mutex
 }
 
@@ -20,8 +20,8 @@ type Allocator struct {
 // Reserved ports: 13, 17
 func NewAllocator(from int, to int, mod int, index int) *Allocator {
 	pa := &Allocator{
-		reserved: sets.NewInt(),
-		used:     sets.NewInt(),
+		reserved: sets.New[int](),
+		used:     sets.New[int](),
 	}
 
 	for i := from; i <= to; i++ {
@@ -52,13 +52,13 @@ func (pa *Allocator) GetByName(portName string) int {
 	pa.mu.Lock()
 	defer pa.mu.Unlock()
 
-	for i := 0; i < 20; i++ {
+	for range 20 {
 		port := pa.getByRange(builder.rangePortFrom, builder.rangePortTo)
 		if port == 0 {
 			return 0
 		}
 
-		l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		l, err := net.Listen("tcp", net.JoinHostPort("0.0.0.0", strconv.Itoa(port)))
 		if err != nil {
 			// Maybe not controlled by us, mark it used.
 			pa.used.Insert(port)
@@ -66,7 +66,7 @@ func (pa *Allocator) GetByName(portName string) int {
 		}
 		l.Close()
 
-		udpAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("127.0.0.1", strconv.Itoa(port)))
+		udpAddr, err := net.ResolveUDPAddr("udp", net.JoinHostPort("0.0.0.0", strconv.Itoa(port)))
 		if err != nil {
 			continue
 		}
@@ -79,6 +79,7 @@ func (pa *Allocator) GetByName(portName string) int {
 		udpConn.Close()
 
 		pa.used.Insert(port)
+		pa.reserved.Delete(port)
 		return port
 	}
 	return 0
